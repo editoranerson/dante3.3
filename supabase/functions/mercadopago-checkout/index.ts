@@ -79,33 +79,40 @@ Deno.serve(async (req: Request) => {
       );
     }
 
-    const preapproval: Record<string, unknown> = {
-      reason: `Assinatura mensal ${plan.title}`,
-      external_reference: `${userData.user.id}:${planId}`,
-      payer_email: payerEmail,
-      auto_recurring: {
-        frequency: 1,
-        frequency_type: "months",
-        transaction_amount: plan.price,
-        currency_id: "BRL",
+    // Checkout Transparente - Cria um link de pagamento customizado
+    const preference: Record<string, unknown> = {
+      items: [
+        {
+          id: planId,
+          title: plan.title,
+          quantity: 1,
+          unit_price: plan.price,
+          currency_id: "BRL",
+        },
+      ],
+      payer: {
+        email: payerEmail,
       },
-      status: "pending",
+      external_reference: `${userData.user.id}:${planId}`,
+      back_urls: {
+        success: backUrl || "",
+        failure: backUrl || "",
+        pending: backUrl || "",
+      },
+      auto_return: "approved",
+      // Impede redirecionamento automático para app
+      binary_mode: false,
+      // Webhook para notificações
+      notification_url: `${Deno.env.get("SUPABASE_URL") ?? ""}/functions/v1/mercadopago-webhook`,
     };
-    if (backUrl) preapproval["back_url"] = backUrl;
 
-    // Webhook URL para receber notificacoes de pagamento
-    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
-    if (supabaseUrl) {
-      preapproval["notification_url"] = `${supabaseUrl}/functions/v1/mercadopago-webhook`;
-    }
-
-    const mpRes = await fetch("https://api.mercadopago.com/preapproval", {
+    const mpRes = await fetch("https://api.mercadopago.com/checkout/preferences", {
       method: "POST",
       headers: {
         Authorization: `Bearer ${token}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify(preapproval),
+      body: JSON.stringify(preference),
     });
 
     const raw = await mpRes.text();
