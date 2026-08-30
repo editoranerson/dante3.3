@@ -31,11 +31,7 @@ export function PlanosPage() {
     const script = document.createElement('script');
     script.src = 'https://mercadopago.com';
     script.async = true;
-    script.onload = () => setMpLoaded(true);
-    document.body.appendChild(script);
-  }, []);
-
-  const checkout = async (planId: PlanType) => {
+      const checkout = async (planId: PlanType) => {
     if (planId === 'free') return;
     if (!user) {
       toast('Faça login para assinar um plano.', 'info');
@@ -63,35 +59,30 @@ export function PlanosPage() {
         }),
       });
       const raw = await res.text();
-      let data: { preference_id?: string; init_point?: string; error?: string } = {};
+      let data: { init_point?: string; error?: string } = {};
       try {
         data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = {};
+      }
       if (!res.ok) {
         toast(data.error || `Erro ao iniciar pagamento (${res.status}).`, 'error');
         return;
       }
 
-      // Abre o fluxo diretamente em uma nova aba para evitar que o app nativo intercepte a navegação atual
+      // Abre o fluxo diretamente em uma nova aba para evitar interferência do app nativo
       if (data.init_point) {
         window.open(data.init_point, '_blank');
       } else {
         toast('Erro ao obter link de pagamento.', 'error');
       }
-        // Abre o checkout em formato MODAL elegante sem desviar para o app nativo!
-        mp.checkout({
-          preference: {
-            id: preferenceId
-          },
-          autoOpen: true
-        });
-      } else if (data.init_point) {
-        // Fallback secundário: abre em nova aba se o script global falhar
-        window.open(data.init_point, '_blank');
-      } else {
-        toast('Erro ao obter dados de pagamento.', 'error');
-      }
-    } catch (e) {
+    } catch {
       toast('Erro de conexão.', 'error');
+    } finally {
+      setLoadingPlan(null);
+    }
+  };
+        
     } finally {
       setLoadingPlan(null);
     }
