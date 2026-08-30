@@ -53,7 +53,15 @@ export function PlanosPage() {
         return;
       }
       if (data.init_point) {
-        window.location.href = data.init_point;
+        // Usar formulário GET em vez de redirecionamento direto
+        // Isso evita que o Mercado Pago force a abertura do app
+        const form = document.createElement('form');
+        form.method = 'GET';
+        form.action = data.init_point;
+        form.target = '_self';
+        document.body.appendChild(form);
+        form.submit();
+        document.body.removeChild(form);
       } else {
         toast('Erro ao obter link de pagamento.', 'error');
       }
