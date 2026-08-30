@@ -66,29 +66,17 @@ export function PlanosPage() {
       let data: { preference_id?: string; init_point?: string; error?: string } = {};
       try {
         data = raw ? JSON.parse(raw) : {};
-      } catch {
-        data = {};
-      }
       if (!res.ok) {
         toast(data.error || `Erro ao iniciar pagamento (${res.status}).`, 'error');
         return;
       }
 
-      // Tenta extrair o preference_id do retorno da Edge Function
-      let preferenceId = data.preference_id;
-      
-      if (!preferenceId && data.init_point) {
-        // Fallback caso a API envie apenas a URL: extrai o ID do parâmetro pref_id ou id
-        const urlParams = new URLSearchParams(data.init_point.split('?')[1]);
-        preferenceId = urlParams.get('pref_id') || urlParams.get('id') || data.init_point.split('id=')[1];
+      // Abre o fluxo diretamente em uma nova aba para evitar que o app nativo intercepte a navegação atual
+      if (data.init_point) {
+        window.open(data.init_point, '_blank');
+      } else {
+        toast('Erro ao obter link de pagamento.', 'error');
       }
-
-      if (preferenceId && window.MercadoPago) {
-        // Inicializa o Mercado Pago de forma limpa usando sua chave pública de produção
-        const mp = new window.MercadoPago('APP_USR-b68ed6ad-7d6a-4e1e-be2a-95ee22a9ae4b', {
-          locale: 'pt-BR'
-        });
-        
         // Abre o checkout em formato MODAL elegante sem desviar para o app nativo!
         mp.checkout({
           preference: {
