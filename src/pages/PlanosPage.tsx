@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Check, Crown, Diamond, Plus, Sparkles, Loader2 } from 'lucide-react';
 import { PLANS } from '@/lib/plans';
 import { supabase, SUPABASE_URL, type PlanType } from '@/lib/supabase';
@@ -7,12 +7,33 @@ import { useToast } from '@/components/Toast';
 import { navigateTo } from '@/lib/router';
 import { getEffectivePlan } from '@/lib/plans';
 
+// Declaração para o TypeScript não reclamar do SDK do Mercado Pago global
+declare global {
+  interface Window {
+    MercadoPago: any;
+  }
+}
+
 export function PlanosPage() {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
+  const [mpLoaded, setMpLoaded] = useState(false);
 
   const currentPlan = profile ? getEffectivePlan(profile) : 'free';
+
+  // Carrega o SDK oficial do Mercado Pago para gerenciar janelas sem quebrar o app
+  useEffect(() => {
+    if (window.MercadoPago) {
+      setMpLoaded(true);
+      return;
+    }
+    const script = document.createElement('script');
+    script.src = 'https://mercadopago.com';
+    script.async = true;
+    script.onload = () => setMpLoaded(true);
+    document.body.appendChild(script);
+  }, []);
 
   const checkout = async (planId: PlanType) => {
     if (planId === 'free') return;
@@ -42,7 +63,7 @@ export function PlanosPage() {
         }),
       });
       const raw = await res.text();
-      let data: { init_point?: string; error?: string } = {};
+      let data: { preference_id?: string; init_point?: string; error?: string } = {};
       try {
         data = raw ? JSON.parse(raw) : {};
       } catch {
@@ -52,20 +73,36 @@ export function PlanosPage() {
         toast(data.error || `Erro ao iniciar pagamento (${res.status}).`, 'error');
         return;
       }
-      if (data.init_point) {
-        // Usar formulário GET em vez de redirecionamento direto
-        // Isso evita que o Mercado Pago force a abertura do app
-        const form = document.createElement('form');
-        form.method = 'GET';
-        form.action = data.init_point;
-        form.target = '_self';
-        document.body.appendChild(form);
-        form.submit();
-        document.body.removeChild(form);
-      } else {
-        toast('Erro ao obter link de pagamento.', 'error');
+
+      // Tenta extrair o preference_id do retorno da Edge Function
+      let preferenceId = data.preference_id;
+      
+      if (!preferenceId && data.init_point) {
+        // Fallback caso a API envie apenas a URL: extrai o ID do parâmetro pref_id ou id
+        const urlParams = new URLSearchParams(data.init_point.split('?')[1]);
+        preferenceId = urlParams.get('pref_id') || urlParams.get('id') || data.init_point.split('id=')[1];
       }
-    } catch {
+
+      if (preferenceId && window.MercadoPago) {
+        // Inicializa o Mercado Pago de forma limpa usando sua chave pública de produção
+        const mp = new window.MercadoPago('APP_USR-b68ed6ad-7d6a-4e1e-be2a-95ee22a9ae4b', {
+          locale: 'pt-BR'
+        });
+        
+        // Abre o checkout em formato MODAL elegante sem desviar para o app nativo!
+        mp.checkout({
+          preference: {
+            id: preferenceId
+          },
+          autoOpen: true
+        });
+      } else if (data.init_point) {
+        // Fallback secundário: abre em nova aba se o script global falhar
+        window.open(data.init_point, '_blank');
+      } else {
+        toast('Erro ao obter dados de pagamento.', 'error');
+      }
+    } catch (e) {
       toast('Erro de conexão.', 'error');
     } finally {
       setLoadingPlan(null);
@@ -166,7 +203,7 @@ export function PlanosPage() {
 
               <button
                 onClick={() => checkout(plan.id)}
-                disabled={isCurrent || isFree || loadingPlan === plan.id}
+                disabled={isCurrent || isFree || loadingPlan === plan.id || !mpLoaded}
                 className={`mt-6 w-full rounded-full py-2.5 text-sm font-semibold transition ${
                   isCurrent
                     ? 'cursor-default border border-white/20 bg-white/5 text-grape-200/50'
@@ -182,7 +219,7 @@ export function PlanosPage() {
                     : loadingPlan === plan.id
                       ? (
                         <span className="flex items-center justify-center gap-2">
-                          <Loader2 size={16} className="animate-spin" /> Redirecionando...
+                          <Loader2 size={16} className="animate-spin" /> Carregando...
                         </span>
                       )
                       : 'Assinar agora'}
