@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import { Check, Crown, Diamond, Plus, Sparkles, Loader2 } from 'lucide-react';
 import { PLANS } from '@/lib/plans';
 import { supabase, SUPABASE_URL, type PlanType } from '@/lib/supabase';
@@ -7,31 +7,14 @@ import { useToast } from '@/components/Toast';
 import { navigateTo } from '@/lib/router';
 import { getEffectivePlan } from '@/lib/plans';
 
-// Declaração para o TypeScript não reclamar do SDK do Mercado Pago global
-declare global {
-  interface Window {
-    MercadoPago: any;
-  }
-}
-
 export function PlanosPage() {
   const { user, profile } = useAuth();
   const { toast } = useToast();
   const [loadingPlan, setLoadingPlan] = useState<string | null>(null);
-  const [mpLoaded, setMpLoaded] = useState(false);
 
   const currentPlan = profile ? getEffectivePlan(profile) : 'free';
 
-  // Carrega o SDK oficial do Mercado Pago para gerenciar janelas sem quebrar o app
-  useEffect(() => {
-    if (window.MercadoPago) {
-      setMpLoaded(true);
-      return;
-    }
-    const script = document.createElement('script');
-    script.src = 'https://mercadopago.com';
-    script.async = true;
-      const checkout = async (planId: PlanType) => {
+  const checkout = async (planId: PlanType) => {
     if (planId === 'free') return;
     if (!user) {
       toast('Faça login para assinar um plano.', 'info');
@@ -70,7 +53,6 @@ export function PlanosPage() {
         return;
       }
 
-      // Abre o fluxo diretamente em uma nova aba para evitar interferência do app nativo
       if (data.init_point) {
         window.open(data.init_point, '_blank');
       } else {
@@ -78,11 +60,6 @@ export function PlanosPage() {
       }
     } catch {
       toast('Erro de conexão.', 'error');
-    } finally {
-      setLoadingPlan(null);
-    }
-  };
-        
     } finally {
       setLoadingPlan(null);
     }
@@ -182,7 +159,7 @@ export function PlanosPage() {
 
               <button
                 onClick={() => checkout(plan.id)}
-                disabled={isCurrent || isFree || loadingPlan === plan.id || !mpLoaded}
+                disabled={isCurrent || isFree || loadingPlan === plan.id}
                 className={`mt-6 w-full rounded-full py-2.5 text-sm font-semibold transition ${
                   isCurrent
                     ? 'cursor-default border border-white/20 bg-white/5 text-grape-200/50'
@@ -198,7 +175,7 @@ export function PlanosPage() {
                     : loadingPlan === plan.id
                       ? (
                         <span className="flex items-center justify-center gap-2">
-                          <Loader2 size={16} className="animate-spin" /> Carregando...
+                          <Loader2 size={16} className="animate-spin" /> Redirecionando...
                         </span>
                       )
                       : 'Assinar agora'}
